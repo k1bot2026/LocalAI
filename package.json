@@ -1,0 +1,23 @@
+{
+  "name": "localai",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "gateway",
+    "mcp-server",
+    "cli",
+    "keep-working-local"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev:gateway": "npm run dev -w gateway",
+    "dev:cli": "npm run dev -w cli"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "@types/node": "^22.0.0"
+  }
+}
