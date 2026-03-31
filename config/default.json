@@ -1,0 +1,31 @@
+{
+  "model": {
+    "name": "localai-coder",
+    "base": "qwen2.5-coder:7b-instruct",
+    "ollama_url": "http://localhost:11434",
+    "ctx_size": 8192,
+    "temperature": 0.3,
+    "top_p": 0.85,
+    "top_k": 40,
+    "repeat_penalty": 1.1
+  },
+  "gateway": {
+    "port": 5577,
+    "retry_on_medium": false,
+    "validate_code_output": true,
+    "prompt_augmentation": true
+  },
+  "confidence": {
+    "auto_accept": "high",
+    "review": "medium",
+    "escalate": "low"
+  },
+  "local_delegation": {
+    "enabled": false,
+    "auto_accept_confidence": "high",
+    "review_confidence": "medium",
+    "escalate_confidence": "low",
+    "max_concurrent_local_tasks": 1
+  },
+  "skills_dir": "./skills"
+}
