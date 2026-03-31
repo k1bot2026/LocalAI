@@ -1,5 +1,5 @@
 // cli/src/format.ts
-import type { ConfidenceLevel } from "../../gateway/src/types.js";
+type ConfidenceLevel = "high" | "medium" | "low";
 
 const COLORS = {
   green: "\x1b[32m",

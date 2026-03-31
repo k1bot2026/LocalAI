@@ -22,9 +22,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   const handler = handlers[name as keyof typeof handlers];
   if (!handler) {
-    return { content: [{ type: "text" as const, text: `Unknown tool: ${name}` }], isError: true };
+    return { content: [{ type: "text" as const, text: `Unknown tool: ${name}` }], isError: true } as any;
   }
-  return handler(args as any);
+  return handler(args as any) as any;
 });
 
 async function main() {
