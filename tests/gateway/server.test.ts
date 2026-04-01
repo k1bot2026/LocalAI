@@ -64,4 +64,137 @@ describe("Express API", () => {
       .send({});
     expect(res.status).toBe(400);
   });
+
+  describe("POST /v1/messages (Anthropic Messages API)", () => {
+    it("returns Anthropic-compatible response format", async () => {
+      const res = await request(app)
+        .post("/v1/messages")
+        .set("anthropic-version", "2023-06-01")
+        .set("x-api-key", "sk-test")
+        .send({
+          model: "qwen-2.5-coder-7b",
+          max_tokens: 4096,
+          messages: [{ role: "user", content: "Hello" }],
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.type).toBe("message");
+      expect(res.body.role).toBe("assistant");
+      expect(res.body.content).toEqual([{ type: "text", text: "Hello!" }]);
+      expect(res.body.model).toBe("localai-coder");
+      expect(res.body.stop_reason).toBe("end_turn");
+      expect(res.body.stop_sequence).toBeNull();
+      expect(res.body.usage.input_tokens).toBe(10);
+      expect(res.body.usage.output_tokens).toBe(5);
+      expect(res.body.id).toMatch(/^msg_localai_\d+$/);
+    });
+
+    it("extracts system prompt from top-level string", async () => {
+      await request(app)
+        .post("/v1/messages")
+        .send({
+          model: "qwen-2.5-coder-7b",
+          max_tokens: 1024,
+          system: "You are helpful",
+          messages: [{ role: "user", content: "Hi" }],
+        });
+
+      expect((mockGateway.process as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(
+        expect.objectContaining({ system: "You are helpful", prompt: "Hi" })
+      );
+    });
+
+    it("extracts system prompt from array of content blocks", async () => {
+      await request(app)
+        .post("/v1/messages")
+        .send({
+          model: "qwen-2.5-coder-7b",
+          max_tokens: 1024,
+          system: [{ type: "text", text: "Block one" }, { type: "text", text: "Block two" }],
+          messages: [{ role: "user", content: "Hi" }],
+        });
+
+      expect((mockGateway.process as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(
+        expect.objectContaining({ system: "Block one\nBlock two" })
+      );
+    });
+
+    it("handles content blocks array in user messages", async () => {
+      await request(app)
+        .post("/v1/messages")
+        .send({
+          model: "qwen-2.5-coder-7b",
+          max_tokens: 1024,
+          messages: [
+            { role: "user", content: [{ type: "text", text: "Part A" }, { type: "text", text: "Part B" }] },
+          ],
+        });
+
+      expect((mockGateway.process as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(
+        expect.objectContaining({ prompt: "Part A\nPart B" })
+      );
+    });
+
+    it("returns 400 when messages array is missing", async () => {
+      const res = await request(app)
+        .post("/v1/messages")
+        .send({ model: "qwen-2.5-coder-7b", max_tokens: 1024 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.type).toBe("error");
+      expect(res.body.error.type).toBe("invalid_request_error");
+    });
+
+    it("returns 502 on gateway error", async () => {
+      (mockGateway.process as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("Ollama down"));
+
+      const res = await request(app)
+        .post("/v1/messages")
+        .send({ messages: [{ role: "user", content: "Hi" }] });
+
+      expect(res.status).toBe(502);
+      expect(res.body.type).toBe("error");
+      expect(res.body.error.type).toBe("api_error");
+    });
+  });
+
+  describe("POST /v1/messages/count_tokens", () => {
+    it("estimates tokens from string content", async () => {
+      const res = await request(app)
+        .post("/v1/messages/count_tokens")
+        .send({
+          messages: [{ role: "user", content: "Hello world" }],
+        });
+
+      expect(res.status).toBe(200);
+      // "Hello world" = 11 chars, ceil(11/4) = 3
+      expect(res.body.input_tokens).toBe(3);
+    });
+
+    it("includes system prompt in token count", async () => {
+      const res = await request(app)
+        .post("/v1/messages/count_tokens")
+        .send({
+          system: "Be helpful",
+          messages: [{ role: "user", content: "Hi" }],
+        });
+
+      // "Be helpful" = 10, "Hi" = 2, total = 12, ceil(12/4) = 3
+      expect(res.status).toBe(200);
+      expect(res.body.input_tokens).toBe(3);
+    });
+
+    it("handles content blocks in messages and system", async () => {
+      const res = await request(app)
+        .post("/v1/messages/count_tokens")
+        .send({
+          system: [{ type: "text", text: "AB" }],
+          messages: [{ role: "user", content: [{ type: "text", text: "CD" }] }],
+        });
+
+      // 2 + 2 = 4, ceil(4/4) = 1
+      expect(res.status).toBe(200);
+      expect(res.body.input_tokens).toBe(1);
+    });
+  });
 });

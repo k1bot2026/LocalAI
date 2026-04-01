@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "localai": {
+      "command": "/opt/homebrew/bin/node",
+      "args": ["/Volumes/ProjectData/LocalAI/mcp-server/dist/index.js"],
+      "env": {
+        "LOCALAI_GATEWAY_URL": "http://localhost:5577"
+      }
+    }
+  }
+}
