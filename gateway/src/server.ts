@@ -4,7 +4,7 @@ import type { Gateway } from "./gateway.js";
 
 export function createApp(gateway: Gateway) {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: "50mb" }));
 
   app.get("/health", (_req: Request, res: Response) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -88,8 +88,25 @@ export function createApp(gateway: Gateway) {
           body: JSON.stringify(req.body),
         });
 
-        const data = await anthropicRes.json();
-        res.status(anthropicRes.status).json(data);
+        // Forward status and headers
+        res.status(anthropicRes.status);
+        const contentType = anthropicRes.headers.get("content-type");
+        if (contentType) res.setHeader("Content-Type", contentType);
+
+        // Stream the response body through (handles both JSON and SSE streaming)
+        if (anthropicRes.body) {
+          const reader = anthropicRes.body.getReader();
+          const pump = async (): Promise<void> => {
+            const { done, value } = await reader.read();
+            if (done) { res.end(); return; }
+            res.write(value);
+            return pump();
+          };
+          await pump();
+        } else {
+          const data = await anthropicRes.text();
+          res.send(data);
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
         res.status(502).json({
