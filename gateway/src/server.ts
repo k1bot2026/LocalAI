@@ -64,22 +64,30 @@ export function createApp(gateway: Gateway) {
     const isClaudeModel = model && (model.startsWith("claude-") || model.startsWith("claude3"));
     if (isClaudeModel) {
       try {
-        const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
-        if (!anthropicApiKey) {
-          res.status(500).json({
-            type: "error",
-            error: { type: "authentication_error", message: "ANTHROPIC_API_KEY not set — cannot proxy to Anthropic API" },
-          });
-          return;
+        // Forward original auth headers from Claude Code (supports both OAuth/Max and API key auth)
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+        // Pass through all auth-related headers from the original request
+        const passthroughHeaders = [
+          "x-api-key", "authorization",
+          "anthropic-version", "anthropic-beta",
+          "anthropic-dangerous-direct-browser-access",
+        ];
+        for (const h of passthroughHeaders) {
+          if (req.headers[h]) headers[h] = req.headers[h] as string;
         }
 
-        const headers: Record<string, string> = {
-          "Content-Type": "application/json",
-          "x-api-key": anthropicApiKey,
-          "anthropic-version": (req.headers["anthropic-version"] as string) ?? "2023-06-01",
-        };
-        if (req.headers["anthropic-beta"]) {
-          headers["anthropic-beta"] = req.headers["anthropic-beta"] as string;
+        // Fallback to env API key only if no auth headers were forwarded
+        if (!headers["x-api-key"] && !headers["authorization"]) {
+          const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+          if (anthropicApiKey) {
+            headers["x-api-key"] = anthropicApiKey;
+          }
+        }
+
+        // Ensure anthropic-version is set
+        if (!headers["anthropic-version"]) {
+          headers["anthropic-version"] = "2023-06-01";
         }
 
         const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -189,19 +197,16 @@ export function createApp(gateway: Gateway) {
     const isClaudeModel = model && (model.startsWith("claude-") || model.startsWith("claude3"));
     if (isClaudeModel) {
       try {
-        const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
-        if (!anthropicApiKey) {
-          res.status(500).json({ type: "error", error: { type: "authentication_error", message: "ANTHROPIC_API_KEY not set" } });
-          return;
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        const passthroughHeaders = ["x-api-key", "authorization", "anthropic-version", "anthropic-beta"];
+        for (const h of passthroughHeaders) {
+          if (req.headers[h]) headers[h] = req.headers[h] as string;
         }
-        const headers: Record<string, string> = {
-          "Content-Type": "application/json",
-          "x-api-key": anthropicApiKey,
-          "anthropic-version": (req.headers["anthropic-version"] as string) ?? "2023-06-01",
-        };
-        if (req.headers["anthropic-beta"]) {
-          headers["anthropic-beta"] = req.headers["anthropic-beta"] as string;
+        if (!headers["x-api-key"] && !headers["authorization"]) {
+          const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+          if (anthropicApiKey) headers["x-api-key"] = anthropicApiKey;
         }
+        if (!headers["anthropic-version"]) headers["anthropic-version"] = "2023-06-01";
         const anthropicRes = await fetch("https://api.anthropic.com/v1/messages/count_tokens", {
           method: "POST",
           headers,
